@@ -9,6 +9,7 @@ dependencies = [
     "ipykernel>=7.2.0",
     "jdk4py>=21.0.8.2,<25",
     "jupyter>=1.1.1",
+    "pandas>=3.0.3",
     "pyspark>=3.5,<4",
     "python-dotenv>=1.2.2",
     "spotipy>=2.26.0",
