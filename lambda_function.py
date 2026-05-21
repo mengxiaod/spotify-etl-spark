@@ -1,7 +1,10 @@
+import json
 import os
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import MemoryCacheHandler
+import boto3
+from datetime import datetime
 
 PLAYLIST_URI = "3FmE8EwSfN556Gbi9Rr7NF"
 
@@ -25,6 +28,15 @@ def lambda_handler(event, context):
     sp = spotipy.Spotify(auth_manager=auth_manager)
     data = sp.playlist(PLAYLIST_URI, market="US")
     spotify_data = data["items"]
-    print(spotify_data)
+
+    client = boto3.client('s3')
+
+    filename = "spotify_raw_" + str(datetime.now()) + ".json"
+
+    client.put_object(
+        Bucket="spotify-etl-project-204537390950-us-east-1-an",
+        Key="raw_data/to_processed/" + filename,
+        Body=json.dumps(spotify_data)
+    )
 
     return {"statusCode": 200, "body": "OK"}
