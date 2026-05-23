@@ -1,4 +1,4 @@
-# How to Setup S3 and Deploy Lambda
+# Spotify ETL Pipeline Project - AWS Lambda, PySpark, Snowflake
 
 ## S3 Folder Structure
 
@@ -32,3 +32,9 @@ s3://your-bucket/
 5. **Trigger** — EventBridge (CloudWatch Events)
    - Create new rule
    - Scheduled expression: `rate(1 minute)` *(for testing only — update before production)*
+
+
+## AWS Glue Setup
+
+1. ETL jobs - Notebook - PySpark code
+2. Add IAM role (AmazonS3FullAccess, AWSGLueServiceNotebookRole, AWSGlueServiceRole, AWSLambda_FullAcess, IAMFullAccess)
