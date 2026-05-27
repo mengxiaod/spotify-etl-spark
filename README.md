@@ -36,5 +36,37 @@ s3://your-bucket/
 
 ## AWS Glue Setup
 
-1. ETL jobs - Notebook - PySpark code
-2. Add IAM role (AmazonS3FullAccess, AWSGLueServiceNotebookRole, AWSGlueServiceRole, AWSLambda_FullAcess, IAMFullAccess)
+1. **ETL Job** — create a Notebook job using PySpark
+
+2. **IAM Role** — attach the following policies:
+   - `AmazonS3FullAccess`
+   - `AWSGlueServiceNotebookRole`
+   - `AWSGlueServiceRole`
+   - `AWSLambda_FullAccess`
+   - `IAMFullAccess`
+
+3. **Data Flow** — Glue reads from `raw_data/to_processed/`, transforms the data, then writes results to `transformed_data/`
+
+
+## Snowpipe
+
+1. **IAM Role** — attach `AmazonS3FullAccess` for the S3–Snowflake connection; update `arn` and `externalId` accordingly
+
+2. **Snowflake Setup** — create database, storage integration, staging area, table schema, and Snowpipe
+
+3. **SQS Triggers** — configure three SQS event notifications under the S3 bucket **Properties** tab, one each to trigger Snowpipe for `album_data/`, `artist_data/`, and `songs_data/`
+
+4. **Logic** — new files written to `transformed_data/` automatically flow into the corresponding Snowflake table via Snowpipe
+
+
+
+
+## Automation
+
+1. **AWS Lambda** 
+   - add `boto3` Glue client to trigger the Glue job (transform data) each time after new raw data is extracted to S3 
+2. **AWS Glue** 
+   - add `boto3` S3 client to copy processed raw data (json file) into `raw/processed/` and delete the original raw data in `raw/to_processed/`.
+
+3. **Lambda Trigger** — EventBridge (CloudWatch Events) - extract raw data from Spotify API every 1 minute
+   - Scheduled expression: `rate(1 minute)` *(for testing only — update before production)*

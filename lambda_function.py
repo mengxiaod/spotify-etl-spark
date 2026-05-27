@@ -1,3 +1,4 @@
+#test AWS Lambda code locally for extracting source data from spotify API
 import json
 import os
 import spotipy
@@ -32,11 +33,21 @@ def lambda_handler(event, context):
     client = boto3.client('s3')
 
     filename = "spotify_raw_" + str(datetime.now()) + ".json"
-
+    #load raw data into s3
     client.put_object(
         Bucket="spotify-etl-project-204537390950-us-east-1-an",
         Key="raw_data/to_processed/" + filename,
         Body=json.dumps(spotify_data)
     )
+    # trigger glue job when extract new raw data to s3
+    glue = boto3.client('glue')
+    gluejobname = "spotify_transformation_job"
 
-    return {"statusCode": 200, "body": "OK"}
+    try:
+        runId = glue.start_job_run(JobName=gluejobname)
+        status = glue.get_job_run(JobName=gluejobname, RunId=runId['JobRunId'])
+        print("Job Status : ", status['JobRun']['JobRunState'])
+    except Exception as e:
+        print(e)
+
+
