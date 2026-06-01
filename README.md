@@ -89,7 +89,7 @@ Amazon EventBridge triggers the Lambda function on a schedule. At the end of eac
 
 ### Option 2 — Apache Airflow DAG
 
-The DAG [`spotify_lambda_trigger`](https://github.com/mengxiaod/airflow-local/blob/main/dags/spotify_etl_orchestration.py) runs on a local Airflow instance and coordinates the same AWS resources through three sequential tasks:
+The DAG link: [`spotify_etl_orchestration`](https://github.com/mengxiaod/airflow-local/blob/main/dags/spotify_etl_orchestration.py) runs on a local Airflow instance and coordinates the same AWS resources through three sequential tasks:
 
 | # | Task | Operator | What it does |
 |---|------|----------|--------------|
