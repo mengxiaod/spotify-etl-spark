@@ -2,12 +2,12 @@
 
 ## Project Review
 
-This project builds a fully automated, cloud-native ETL pipeline that continuously extracts Spotify playlist data, transforms it into a structured format, and loads it into a Snowflake data warehouse for analytics.
+This project builds a fully automated ETL pipeline that continuously extracts Spotify playlist data, transforms it into a structured format, and loads it into a Snowflake data warehouse for analytics. It supports **two orchestration options**: a fully serverless AWS-native flow and a locally-hosted Apache Airflow DAG.
 
-Raw playlist data is fetched from the **Spotify API** via **AWS Lambda** (Python), stored as JSON in **Amazon S3**, and transformed into three normalised tables — albums, artists, and songs — using **PySpark on AWS Glue**. The cleaned CSVs are then automatically ingested into **Snowflake** through **Snowpipe**, triggered by S3 event notifications. The entire pipeline runs on a schedule with no manual intervention.
+Raw playlist data is fetched from the **Spotify API** via **AWS Lambda** (Python), stored as JSON in **Amazon S3**, and transformed into three normalised tables — albums, artists, and songs — using **PySpark on AWS Glue**. The cleaned CSVs are then automatically ingested into **Snowflake** through **Snowpipe**, triggered by S3 event notifications.
 
 **Key capabilities:**
-- Fully automated end-to-end pipeline — EventBridge triggers Lambda every minute, Lambda triggers Glue, Glue output triggers Snowpipe
+- Two orchestration options — AWS-native (EventBridge + Lambda chain) or Apache Airflow DAG
 - PySpark transformation on AWS Glue — flattens nested JSON, deduplicates, and splits into album, artist, and song datasets
 - Auto-ingest with Snowpipe — new S3 files flow into Snowflake tables automatically via SQS notifications
 - Raw data lifecycle management — processed JSON is moved from `to_processed/` to `processed/` after each Glue run
@@ -78,6 +78,32 @@ s3://your-bucket/
 </td>
 </tr>
 </table>
+
+---
+
+## Orchestration Options
+
+### Option 1 — AWS-Native (EventBridge · Lambda · Glue chain)
+
+Amazon EventBridge triggers the Lambda function on a schedule. At the end of each Lambda run, `boto3` immediately starts the Glue job, and when Glue finishes writing CSVs, S3 event notifications fire Snowpipe automatically. No external orchestrator is required — the pipeline is entirely serverless.
+
+### Option 2 — Apache Airflow DAG
+
+The DAG [`spotify_lambda_trigger`](https://github.com/mengxiaod/airflow-local/blob/main/dags/spotify_etl_orchestration.py) runs on a local Airflow instance and coordinates the same AWS resources through three sequential tasks:
+
+| # | Task | Operator | What it does |
+|---|------|----------|--------------|
+| 1 | `invoke_lambda` | `LambdaInvokeFunctionOperator` | Calls the `spotify_api_data_extract` Lambda to pull data from the Spotify API and write raw JSON to S3 |
+| 2 | `s3_sensor` | `S3KeySensor` | Polls the S3 bucket every 60 s (up to 1 h) until the raw file appears, ensuring the Glue job only starts after data has landed |
+| 3 | `run_glue_job` | `GlueJobOperator` | Launches `spotify_transformation_job` on AWS Glue to run the PySpark transformation |
+
+Snowpipe handles the final load into Snowflake automatically once the Glue CSVs are written — the same as Option 1.
+
+**When to choose Airflow:** use this option when you want explicit task-level visibility, retry policies, and a UI to monitor each step, or when you are already running Airflow for other pipelines and want to centralise scheduling there.
+
+The DAG run below shows all three tasks completing successfully:
+
+![Airflow DAG — all three tasks succeeded](images/airflow_dag.png)
 
 ---
 
@@ -182,7 +208,26 @@ New CSV files in `transformed_data/` automatically trigger Snowpipe via S3 Event
    - Copies processed JSON to `raw_data/processed/` and deletes originals
 
 
-### 3. Snowflake & Snowpipe
+### 3. Apache Airflow
+
+The DAG file lives in the companion repo: [mengxiaod/airflow-local](https://github.com/mengxiaod/airflow-local/blob/main/dags/spotify_etl_orchestration.py).
+
+
+
+**Create the AWS connection** in the Airflow UI (Admin → Connections):
+
+   | Field | Value |
+   |-------|-------|
+   | Connection ID | `aws_s3_spotify` |
+   | Connection Type | Amazon Web Services |
+   | AWS Access Key ID | your IAM key |
+   | AWS Secret Access Key | your IAM secret |
+   | Extra | `{"region_name": "us-east-1"}` |
+
+
+---
+
+### 4. Snowflake & Snowpipe
 
 1. **IAM Role** — create a role with `AmazonS3FullAccess`; paste the generated `STORAGE_AWS_ROLE_ARN` and `STORAGE_AWS_EXTERNAL_ID` into `Spotify_snowpipe.sql`
 
@@ -211,7 +256,8 @@ New CSV files in `transformed_data/` automatically trigger Snowpipe via S3 Event
 |-------|-----------|
 | Data source | Spotify Web API (`spotipy`) |
 | Extraction | AWS Lambda (Python 3.13) |
-| Orchestration | Amazon EventBridge · AWS Lambda (`boto3`) |
+| Orchestration (Option 1) | Amazon EventBridge · AWS Lambda (`boto3`) |
+| Orchestration (Option 2) | Apache Airflow (local) · `LambdaInvokeFunctionOperator` · `S3KeySensor` · `GlueJobOperator` |
 | Transformation | AWS Glue 5.1 · PySpark 3.5 |
 | Storage | Amazon S3 |
 | Loading | Snowpipe (auto-ingest via SQS) |
